@@ -14,6 +14,7 @@ class PostionalEncoding(kl.Layer):
             wavelength (regarding positions) of the positinal encoding
             is equal to 2pi*max_denom.
         """
+        super(PostionalEncoding, self).__init__()
         self.max_denom = max_denom
 
     def alternate_concat(self, X: tf.Tensor, Y: tf.Tensor):
