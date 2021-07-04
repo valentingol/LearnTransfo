@@ -7,23 +7,8 @@ import tensorflow as tf
 myPath = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, myPath + '/../../')
 
+from tests.tests_utils import tf_equal
 from transformer.architecture.attention import MultiHeadAttention
-
-def tf_equal(A: tf.Tensor, B:tf.Tensor):
-    """Returns if A and B have all their components closed (returns True).
-    Or not (returns False). A and B must be broadcastable together.
-
-    Parameters
-    ----------
-    A : tf.Tensor
-    B : tf.Tensor
-
-    Returns
-    -------
-    res : bool
-    """
-    return tf.math.reduce_all(tf.experimental.numpy.isclose(A, B)).numpy()
-
 
 @pytest.fixture
 def mha():
