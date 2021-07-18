@@ -2,3 +2,4 @@ matplotlib==3.4.2
 pytest==6.2.4
 tensorflow==2.5
 tensorflow_datasets==4.3.0
+tensorflow_text==2.5
