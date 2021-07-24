@@ -1,21 +1,15 @@
-import os
-import sys
-
 import pytest
 import tensorflow as tf
-
-myPath = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, myPath + '/../../')
 
 from transformer.architecture.attention import MultiHeadAttention
 from transformer.architecture.decoder import DecoderBlock, Decoder
 from transformer.architecture.feedforward import FeedForward
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def decoder_block():
     return DecoderBlock(d_model=512, n_heads=8, d_ff=1024, dropout=0.2)
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def decoder():
     return Decoder(n_blocks=6, d_model=512, n_heads=8, d_ff=1024, dropout=0.2)
 
