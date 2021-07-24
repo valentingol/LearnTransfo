@@ -1,16 +1,10 @@
-import os
-import sys
-
 import pytest
 import tensorflow as tf
-
-myPath = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, myPath + '/../../')
 
 from tests.tests_utils import tf_equal
 from transformer.architecture.attention import MultiHeadAttention
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def mha():
     return MultiHeadAttention(d_model=512, n_heads=8)
 
@@ -43,10 +37,10 @@ def test_split_to_heads(mha):
     # errors
     X = tf.random.normal((32, 200, 511))
     with pytest.raises(ValueError, match=".*512.*"):
-        X_split = mha.split_to_heads(X)
+        mha._split_to_heads(X)
     # normal usage
     X = tf.random.normal((32, 200, 512))
-    X_split = mha.split_to_heads(X)
+    X_split = mha._split_to_heads(X)
     assert X_split.shape == tf.TensorShape((32, 8, 200, 64)), (
         "output of split_to_heads has not the expected shape"
         )

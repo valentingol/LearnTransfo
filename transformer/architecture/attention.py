@@ -31,7 +31,7 @@ class MultiHeadAttention(kl.Layer):
         self.Wv = kl.Dense(d_model)
         self.Wo = kl.Dense(d_model)
 
-    def split_to_heads(self, X: tf.Tensor):
+    def _split_to_heads(self, X: tf.Tensor):
         """Splits the last dimension into (n_heads, d_head)
         and transposes output to have the heads dimension as
         second dimension.
@@ -52,12 +52,11 @@ class MultiHeadAttention(kl.Layer):
             X splitted into heads. The first dimension is the dimension
             of batches, the second dimension is the dimension of heads.
         """
-        if X.shape[-1] != self.d_model:
-            raise ValueError("the depth of the input does not match "
-                             f"the model depth (found {X.shape[-1]}, expected "
-                             f"{self.d_model})")
-
-        batch_size = X.shape[0]
+        if X.get_shape()[-1] != self.d_model:
+            raise ValueError(f"the last dimension of X must be equal to "
+                              f"d_model, found {X.get_shape()[-1]} and "
+                              f"{self.d_model}.")
+        batch_size = tf.shape(X)[0]
         X_split = tf.reshape(X, (batch_size, -1, self.n_heads, self.d_head))
         X_split = tf.transpose(X_split, perm=[0, 2, 1, 3])
         return X_split
@@ -91,13 +90,14 @@ class MultiHeadAttention(kl.Layer):
         attention : tf.tensor, shape = (..., lenQ, lenK)
             Attention weights (output of the softmax).
         """
-        if Q.shape[-1] != K.shape[-1]:
-            raise ValueError("Q and K depths does not match"
-                             f"(found {Q.shape[-1]} and {K.shape[-1]})")
-        if K.shape[-2] != V.shape[-2]:
-            raise ValueError("K and V sequence lengths does not match "
-                             f"(found {K.shape[-2]} and {V.shape[-2]})")
-
+        if Q.get_shape()[-1] != K.get_shape()[-1]:
+            raise ValueError("the last dimension of Q and K must be equal, "
+                             f"found {Q.get_shape()[-1]} and "
+                             f"{K.get_shape()[-1]}.")
+        if K.get_shape()[-2] != V.get_shape()[-2]:
+            raise ValueError("the penultimate dimension of Q and K must be "
+                             f"equal, found {K.get_shape()[-2]} and "
+                             f"{V.get_shape()[-2]}.")
         QK = tf.matmul(Q, K, transpose_b = True) # (..., lenQ, lenK)
         dK = tf.cast(tf.shape(K)[-1], tf.float32)
         logits = QK / tf.math.sqrt(dK)
@@ -142,22 +142,20 @@ class MultiHeadAttention(kl.Layer):
         attention : tf tensor, shape=(batch_size, n_heads, lenQ, lenK)
             Batched attention weights of the block.
         """
-        batch_size = Q.shape[0]
-        if K.shape[0] != batch_size:
-            raise ValueError("Q and K first dimension (that should be the "
-                             f"batch size) does not match (found {Q.shape[0]}"
-                             f" and {K.shape[0]})")
-        if V.shape[0] != batch_size:
-            raise ValueError("Q and V first dimension (that should be the "
-                             f"batch size) does not match (found {Q.shape[0]}"
-                             f" and {V.shape[0]})")
+        if (K.get_shape()[0] != Q.get_shape()[0] or
+            V.get_shape()[0] != Q.get_shape()[0]):
+            raise ValueError("Q, K and V must have the same first dimension "
+                             "(batch size), found respectively "
+                             f"{Q.get_shape()[0]}, {K.get_shape()[0]} and "
+                             f"{V.get_shape()[0]}.")
 
+        batch_size = tf.shape(Q)[0]
         Q = self.Wq(Q) # (batch_size, lenQ, d_model)
         K = self.Wk(K)
         V = self.Wv(V)
-        Q = self.split_to_heads(Q) # (batch_size, n_heads, lenQ, d_head)
-        K = self.split_to_heads(K)
-        V = self.split_to_heads(V)
+        Q = self._split_to_heads(Q) # (batch_size, n_heads, lenQ, d_head)
+        K = self._split_to_heads(K)
+        V = self._split_to_heads(V)
 
         heads, attention = self.scaled_dot_product_attention(Q, K, V, mask)
 

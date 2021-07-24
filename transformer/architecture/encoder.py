@@ -25,12 +25,17 @@ class EncoderBlock(kl.Layer):
         dropout : float, optional
             Rate of dropout, by default 0.0.
         """
+        Layer_norm = kl.LayerNormalization
+
         super(EncoderBlock, self).__init__()
         self.d_model = d_model
         self.n_heads = n_heads
         self.dropout = dropout
         self.mha = MultiHeadAttention(d_model=d_model, n_heads=n_heads)
         self.ff = FeedForward(d_model=d_model, d_ff=d_ff)
+        self.layernorm1 = Layer_norm(epsilon=1e-6)
+        self.layernorm2 = Layer_norm(epsilon=1e-6)
+        self.dropoutlayer = kl.Dropout(rate=dropout)
 
     def __call__(self, inputs: tf.Tensor, in_pad_mask: tf.Tensor=None,
                  training: bool=False):
@@ -62,23 +67,22 @@ class EncoderBlock(kl.Layer):
             Batched attention weights of the Multi-Head
             Attention block.
         """
+        if inputs.get_shape()[-1] != self.d_model:
+            raise ValueError("Last dimension of 'inputs' should be equal to "
+                             f"d_model, found {inputs.get_shape()[-1]} and "
+                             f"{self.d_model}.")
         X = inputs
-        if X.shape[-1] != self.d_model:
-            raise ValueError("Input data tensor last dimension and specified "
-                             f"d_model do not match (found {X.shape[-1]} and "
-                             f"{self.d_model}")
-
-        Layer_norm = kl.LayerNormalization
         # self attention
-        att_outputs, attention = self.mha(X, X, X, mask=in_pad_mask)
-        att_outputs = kl.Dropout(self.dropout)(att_outputs, training=training)
-        att_outputs = Layer_norm(epsilon=1e-6)(att_outputs + X)
-
-        ff_outputs = self.ff(att_outputs)
-        ff_outputs = kl.Dropout(self.dropout)(ff_outputs, training=training)
-        block_outputs = Layer_norm(epsilon=1e-6)(ff_outputs + att_outputs)
-        # size=(batch_size, seq_len, d_model)
-
+        X_norm = self.layernorm1(X)
+        pre_X1, attention = self.mha(X_norm, X_norm, X_norm, mask=in_pad_mask)
+        pre_X1 = self.dropoutlayer(pre_X1, training=training)
+        X1 = pre_X1 + X # size=(batch_size, seq_len, d_model)
+        # feed forward
+        X1_norm = self.layernorm2(X1)
+        pre_X2 = self.ff(X1_norm)
+        pre_X2 = self.dropoutlayer(pre_X2, training=training)
+        X2 = pre_X2 + X1 # size=(batch_size, seq_len, d_model)
+        block_outputs = X2
         return block_outputs, attention
 
 

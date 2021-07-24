@@ -1,16 +1,10 @@
-import os
-import sys
-
 import pytest
 import tensorflow as tf
-
-myPath = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, myPath + '/../../')
 
 from transformer.architecture.feedforward import FeedForward
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def ff():
     return FeedForward(d_model=512, d_ff=1024, activation='relu')
 
@@ -24,9 +18,12 @@ def test_init_feedforward():
                              "expected value")
     assert ff.activation == 'relu', ("activation attribute does not match the "
                                      "expected value")
+
+    ff = FeedForward(d_model=512, d_ff=1024, activation='gelu')
+    assert ff.activation == 'gelu', ("activation attribute does not match the "
+                                     "expected value")
     # test with callable activation
-    def activation(X: tf.Tensor):
-        return tf.maximum(X, 0.0)
+    activation = lambda X: tf.maximum(X, 0.0)
     FeedForward(d_model=512, d_ff=1024, activation=activation)
 
 

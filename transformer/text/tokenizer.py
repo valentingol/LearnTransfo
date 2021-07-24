@@ -1,4 +1,3 @@
-from os import remove
 import re
 
 import tensorflow as tf
@@ -85,7 +84,11 @@ class TokenizerBert(object):
         """
         if self.tokenizer is None:
             raise ValueError("Tokenizer not built yet.")
-        if text.ndim == 0:
+        if tf.rank(text) > 1:
+            raise ValueError("Input text must be 1-D or 0-D, got "
+                             f"{tf.rank(text)}-D tensor.")
+
+        if tf.rank(text) == 0:
                 text = tf.expand_dims(text, 0)
         if self.remove_char is not None:
             text = text.numpy()
@@ -94,6 +97,7 @@ class TokenizerBert(object):
                 text = [re.sub(c, ' ', line) for line in text]
             text = tf.constant(text)
         tokens = self.tokenizer.tokenize(text)
+        tokens = tf.cast(tokens, tf.int64)
         tokens = tokens.merge_dims(-2,-1)
         # add 0 to the end of sequences shorter than max_seq_length
         tokens = tokens.to_tensor()
@@ -129,38 +133,3 @@ class TokenizerBert(object):
         """Performes the tokenization (see .tokenize() method).
         """
         return self.tokenize(text)
-
-
-if __name__ == '__main__':
-    import os
-    import sys
-    myPath = os.path.dirname(os.path.abspath(__file__))
-    sys.path.insert(0, myPath + '/../../')
-    from datasets.scripts.fra_eng import datasets_fra_eng
-    _, _, full_dataset = datasets_fra_eng()
-    fr_dataset = full_dataset.map(lambda fr, _: fr)
-    fr_tokenizer = TokenizerBert(lower_case=False)
-    fr_tokenizer.build_tokenizer(fr_dataset.take(3000))
-    fr_text = [
-        "Nous sommes enthousiasmés par l'avenir des modèles basés",
-        "sur l'attention et prévoyons de les appliquer à d'autres",
-        "tâches. Nous prévoyons d'étendre les Transformers aux problèmes",
-        "impliquant des modalités d'entrée et de sortie différentes",
-        "de celles du texte, et d'étudier les mécanismes d'attention locale",
-        "restreinte pour gérer efficacement des entrées et sorties",
-        "volumineuses comme les images, l'audio et les vidéos. Rendre la",
-        "génération moins séquentielle est un de nos autres objectifs",
-        "de recherche."
-        ]
-    fr_dataset = tf.data.Dataset.from_tensor_slices(fr_text)
-    print('vocab', fr_tokenizer.vocab)
-    print('len vocab:', len(fr_tokenizer.vocab))
-    print('\ntokens:')
-    for text in fr_dataset.batch(2):
-        tokens = fr_tokenizer.tokenize(text)
-        print(tokens)
-    print('\ntext:')
-    for text in fr_dataset.batch(2):
-        tokens = fr_tokenizer.tokenize(text)
-        text_tensor = fr_tokenizer.detokenize(tokens)
-        tf.print(text_tensor)
