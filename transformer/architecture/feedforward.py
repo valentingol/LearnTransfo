@@ -3,7 +3,7 @@ kl = tf.keras.layers
 
 class FeedForward(kl.Layer):
 
-    def __init__(self, d_model: int, d_ff: int, activation='relu'):
+    def __init__(self, d_model: int, d_ff: int, activation='gelu'):
         """
         Parameters
         ----------
@@ -19,11 +19,11 @@ class FeedForward(kl.Layer):
         self.d_model = d_model
         self.d_ff = d_ff
         self.activation = activation
-
-    def __call__(self, X):
-        ff = tf.keras.Sequential([
+        self.model = tf.keras.Sequential([
             kl.Dense(self.d_ff, activation=self.activation),
             kl.Dense(self.d_model, activation='linear')
-        ])
-        output = ff(X)
+            ])
+
+    def __call__(self, X):
+        output = self.model(X)
         return output

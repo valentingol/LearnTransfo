@@ -47,23 +47,23 @@ def get_future_mask(token: tf.Tensor):
         broadcastable with the batch and the heads dimension of
         logits in the attention operation.
     """
-    seq_len = token.shape[-1]
+    seq_len = tf.shape(token)[-1]
     ones = tf.ones((seq_len, seq_len), dtype=tf.int32)
     future_mask = tf.linalg.band_part(ones, -1, 0)
     future_mask = future_mask[tf.newaxis, tf.newaxis, ...]
     return future_mask
 
 
-def get_masks(inputs_token_seq: tf.Tensor, outputs_token_seq: tf.Tensor):
+def get_masks(inputs_token: tf.Tensor, outputs_token: tf.Tensor):
     """Returns input padding mask and combined output mask
     (product of output padding mask and future mask). The results
     are broadcastable with logits in attention operation.
 
     Parameters
     ----------
-    inputs_token_seq : tf.Tensor
+    inputs_token : tf.Tensor
         Input token sequences with zero padding.
-    outputs_token_seq : tf.Tensor
+    outputs_token : tf.Tensor
         Output token sequences with zero padding.
 
     Returns
@@ -82,9 +82,9 @@ def get_masks(inputs_token_seq: tf.Tensor, outputs_token_seq: tf.Tensor):
         broadcastable with the heads dimension of logits in
         the attention operation.
     """
-    in_pad_mask = get_padding_mask(inputs_token_seq)
-    out_pad_mask = get_padding_mask(outputs_token_seq)
-    future_mask = get_future_mask(outputs_token_seq)
+    in_pad_mask = get_padding_mask(inputs_token)
+    out_pad_mask = get_padding_mask(outputs_token)
+    future_mask = get_future_mask(outputs_token)
     # out_pad_mask and future_mask are broadcasted together
     out_mask = future_mask * out_pad_mask
     return in_pad_mask, out_mask

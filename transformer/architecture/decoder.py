@@ -25,6 +25,8 @@ class DecoderBlock(kl.Layer):
         dropout : float, optional
             Rate of dropout, by default 0.0.
         """
+        Layer_norm = kl.LayerNormalization
+
         super(DecoderBlock, self).__init__()
         self.d_model = d_model
         self.n_heads = n_heads
@@ -32,6 +34,10 @@ class DecoderBlock(kl.Layer):
         self.mha_self = MultiHeadAttention(d_model=d_model, n_heads=n_heads)
         self.mha_encoder = MultiHeadAttention(d_model=d_model, n_heads=n_heads)
         self.ff = FeedForward(d_model=d_model, d_ff=d_ff)
+        self.layernorm1 = Layer_norm(epsilon=1e-6)
+        self.layernorm2 = Layer_norm(epsilon=1e-6)
+        self.layernorm3 = Layer_norm(epsilon=1e-6)
+        self.dropoutlayer = kl.Dropout(rate=dropout)
 
     def __call__(self, outputs: tf.Tensor, encoder_outputs: tf.Tensor,
                  out_mask: tf.Tensor, in_pad_mask: tf.Tensor=None,
@@ -73,29 +79,30 @@ class DecoderBlock(kl.Layer):
             Batched attention weights of the second Multi-Head
             Attention block (attention based on encoder output).
         """
+        if outputs.get_shape()[-1] != self.d_model:
+            raise ValueError("Last dimension of 'outputs' should be equal to "
+                             f"d_model, found {outputs.get_shape()[-1]} and "
+                             f"{self.d_model}.")
         X = outputs
         E = encoder_outputs
-        if X.shape[-1] != self.d_model:
-            raise ValueError("Output data tensor last dimension and specified "
-                             f"d_model do not match (found {X.shape[-1]} and "
-                             f"{self.d_model}")
-
-        Layer_norm = kl.LayerNormalization
         # self attention
-        att1_outputs, self_attention = self.mha_self(X, X, X, mask=out_mask)
-        att1_outputs = kl.Dropout(self.dropout)(att1_outputs, training=training)
-        att1_outputs = Layer_norm(epsilon=1e-6)(att1_outputs + X)
+        X_norm = self.layernorm1(X)
+        pre_X1, self_attention = self.mha_self(X_norm, X_norm, X_norm,
+                                                     mask=out_mask)
+        pre_X1 = self.dropoutlayer(pre_X1, training=training)
+        X1 = pre_X1 + X # size=(batch_size, seq_len, d_model)
         # encoder output attention
-        att2_outputs, encoder_attention = self.mha_encoder(E, E, X,
+        X1_norm = self.layernorm2(X1)
+        pre_X2, encoder_attention = self.mha_encoder(X1_norm, E, E,
                                                            mask=in_pad_mask)
-        att2_outputs = kl.Dropout(self.dropout)(att2_outputs, training=training)
-        att2_outputs = Layer_norm(epsilon=1e-6)(att2_outputs + att1_outputs)
-
-        ff_outputs = self.ff(att2_outputs)
-        ff_outputs = kl.Dropout(self.dropout)(ff_outputs, training=training)
-        block_outputs = Layer_norm(epsilon=1e-6)(ff_outputs + att2_outputs)
-        # size=(batch_size, seq_len, d_model)
-
+        pre_X2 = self.dropoutlayer(pre_X2, training=training)
+        X2 = pre_X2 + X1 # size=(batch_size, seq_len, d_model)
+        # feed forward
+        X2_norm = self.layernorm3(X2)
+        pre_X3 = self.ff(X2_norm)
+        pre_X3 = self.dropoutlayer(pre_X3, training=training)
+        X3 = pre_X3 + X2 # size=(batch_size, seq_len, d_model)
+        block_outputs = X3
         return block_outputs, self_attention, encoder_attention
 
 
@@ -126,6 +133,7 @@ class Decoder(kl.Layer):
             DecoderBlock(d_model=d_model, n_heads=n_heads, d_ff=d_ff,
                          dropout=dropout) for _ in range(n_blocks)
             ]
+        self.layernorm = kl.LayerNormalization(epsilon=1e-6)
 
     def __call__(self, outputs: tf.Tensor, encoder_outputs: tf.Tensor,
                  out_mask: tf.Tensor, in_pad_mask: tf.Tensor=None,
@@ -163,10 +171,11 @@ class Decoder(kl.Layer):
             Attention blocks (attentions based on encoder output).
         """
         X = outputs
+        E = self.layernorm(encoder_outputs)
         self_attentions, encoder_attentions = [], []
         X = kl.Dropout(self.dropout)(X, training=training)
         for decoder_block in self.decoder_blocks:
-            X, att1, att2 = decoder_block(X, encoder_outputs=encoder_outputs,
+            X, att1, att2 = decoder_block(X, encoder_outputs=E,
                                          out_mask=out_mask,
                                          in_pad_mask=in_pad_mask,
                                          training=training)
